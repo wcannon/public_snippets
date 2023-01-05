@@ -7,16 +7,19 @@ from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
+REGIONS = ["us-east-1", "us-west-2"]
+
 '''Objective: create an easy way to gather info for all ASG launch templates, and update them as well'''
 
-
-def main():
-  ec2 = boto3.resource('ec2') # can call this with a specific region e.g. boto3.resource('ec2', region_name='us-west-2')
-  client = boto3.client('ec2')
-  response = client.describe_images(Owners=['self'])
-  images =  response['Images']
-  amis = []
-
+def get_asgs(client):
+  '''Return a list of all ASGs for a region'''
+  # 'describe_auto_scaling_groups',
+  groups = client.describe_auto_scaling_groups()['AutoScalingGroups']
+  print("*"*80)
+  print(f"Number of ASGs found: {len(groups)}")
+  for g in groups:
+    print(f"Name: {g['AutoScalingGroupName']}")
+  return groups
 
 def describe_group(client, group_name):
     """
@@ -75,20 +78,29 @@ def do_it():
   print("-"*80)
 
 
-def main2():
-  do_it()
-  
+def main():
+  for region in REGIONS:
+    print("-"*80)
+    print("-"*80)
+    print(f"NOW IN REGION: {region}")
+    ec2_client = boto3.client('ec2', region_name=region)
+    asg_client = boto3.client('autoscaling', region_name=region)
+    asgs = get_asgs(asg_client)
+    pprint.pprint(asgs)  
 
 if __name__ == "__main__":
-  print("Hello, world!")
-  main2()
-  #main()
+  main()
+
 
 '''
 TODO:
-1. in aws console, create asg
-2. update code to get asg info
-3. update code to get asg launch template
-4. inspect tags
-5. determine if Vendor_Managed_AMI tag is set correctly, or exists
-6. correct it if need be and update launch template'''
+* Assuming we have a list of ASGs to act on
+- get the launch template id, name, version, tags, ami, ami path
+- determine how to update the tags iow what logic to apply
+- create new launch template version from the current one, updating with our new tags
+- update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number?
+
+Notes:
+https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#client
+Can use create_launch_template_version(**kwargs)¶ to create a new launch template from a previous one, and update the tags
+'''
