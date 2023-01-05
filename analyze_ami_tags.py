@@ -39,7 +39,7 @@ def describe_group(client, group_name):
         groups = response.get('AutoScalingGroups', [])
         return groups[0] if len(groups) > 0 else None
 
-def get_template(ec2_client, template_name):
+def get_lt_template(ec2_client, template_name):
   """
   Gets a launch template. Launch templates specify configuration for instances
   that are launched by Amazon EC2 Auto Scaling.
@@ -87,6 +87,10 @@ def main():
     asg_client = boto3.client('autoscaling', region_name=region)
     asgs = get_asgs(asg_client)
     pprint.pprint(asgs)  
+    for asg in asgs:
+      lt = get_lt_template(ec2_client, asg['LaunchTemplate']['LaunchTemplateName'])
+      print("-"*80)
+      pprint.pprint(lt)
 
 if __name__ == "__main__":
   main()
