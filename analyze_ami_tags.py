@@ -60,6 +60,15 @@ def get_lt_template(ec2_client, template_name):
   else:
       return template
 
+def get_lt_info(ec2_client, template_name):
+  response = ec2_client.describe_launch_template_versions(
+    LaunchTemplateName=template_name,
+    Versions=[
+        '$Default',
+    ]
+  )
+  return response
+
 def do_it():
   ec2 = boto3.client('ec2')
   response = ec2.describe_instances()
@@ -91,6 +100,10 @@ def main():
       lt = get_lt_template(ec2_client, asg['LaunchTemplate']['LaunchTemplateName'])
       print("-"*80)
       pprint.pprint(lt)
+      response = get_lt_info(ec2_client, asg['LaunchTemplate']['LaunchTemplateName'])
+      print("*" * 80)
+      print("LAUNCH TEMPLATE INFO")
+      pprint.pprint(f"{response}")
 
 if __name__ == "__main__":
   main()
@@ -99,7 +112,7 @@ if __name__ == "__main__":
 '''
 TODO:
 * Assuming we have a list of ASGs to act on
-- get the launch template id, name, version, tags, ami, ami path
+- get the launch template id, name, version, tags, ami, ami path - use describe launch template versions
 - determine how to update the tags iow what logic to apply
 - create new launch template version from the current one, updating with our new tags
 - update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number?
