@@ -73,6 +73,10 @@ def get_ami_id(response):
   '''Return just hte ImageID for the AMI'''
   return response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
 
+def get_launch_template_version(response):
+  '''Return just hte ImageID for the AMI'''
+  return response['LaunchTemplateVersions'][0]['VersionNumber']
+
 def get_ami_info(ec2_client, ami_id):
   '''Looks up and returns ami_name, owner, location'''
   image_info = ec2_client.describe_images(ImageIds=[ami_id])
@@ -88,7 +92,14 @@ def get_ami_info(ec2_client, ami_id):
 
 def get_vendor_tag_value(image_location, ami_name, owner_id):
   '''fill out with logic later on - returns true, false, tbd'''
-  return True
+  return "true"
+
+def create_new_launch_template(ec2_client, lt_name, lt_version, lt_dict):
+  '''Create a new launch template, simply updating it with our new tag dictionary'''
+  ec2_client.create_launch_template_version(LaunchTemplateName=lt_name,
+                                            SourceVersion=lt_version,
+                                            LaunchTemplateData=lt_dict)
+  return
 
 def update_launch_template(template_name, tag_value):
   '''Creates new version of launch template, returns version number, sets as default template to use'''
@@ -113,14 +124,19 @@ def main():
       print("LAUNCH TEMPLATE INFO")
       pprint.pprint(f"{response}")
       ami_id = get_ami_id(response)
+      lt_version = get_launch_template_version(response)
       print("*" * 80)
       print(f"AMI ImageID: {ami_id}") 
+      print(f"launch template version: {lt_version}") 
       image_location, ami_name, owner_id = get_ami_info(ec2_client, ami_id)
       print("*" * 80)
       print(f"image_location: {image_location}")
       print(f"ami_name: {ami_name}")
       print(f"owner_id: {owner_id}")
       tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
+      print("*" * 80)
+      print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
+      print("*" * 80)     
 
 
 if __name__ == "__main__":
@@ -133,7 +149,7 @@ TODO:
 - get the default launch template id, name, version, tags, ami, 
 - get ami details querying the data for the particular ami e.g. path 
 - determine how to update the tags with new Vendor_Managed_AMI 
-- create new launch template version from the current one, updating with our new tags 
+- create new launch template version from the template set as default, passing in our new tags 
 - update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number
 
 Notes:
