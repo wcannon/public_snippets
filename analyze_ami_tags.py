@@ -73,6 +73,10 @@ def get_ami_id(response):
   '''Return just hte ImageID for the AMI'''
   return response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
 
+def get_lt_name(response):
+  '''Return the template name'''
+  return response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
+
 def get_launch_template_version(response):
   '''Return just hte ImageID for the AMI'''
   return response['LaunchTemplateVersions'][0]['VersionNumber']
@@ -96,10 +100,10 @@ def get_vendor_tag_value(image_location, ami_name, owner_id):
 
 def create_new_launch_template(ec2_client, lt_name, lt_version, lt_dict):
   '''Create a new launch template, simply updating it with our new tag dictionary'''
-  ec2_client.create_launch_template_version(LaunchTemplateName=lt_name,
+  response = ec2_client.create_launch_template_version(LaunchTemplateName=lt_name,
                                             SourceVersion=lt_version,
                                             LaunchTemplateData=lt_dict)
-  return
+  return response
 
 def update_launch_template(template_name, tag_value):
   '''Creates new version of launch template, returns version number, sets as default template to use'''
@@ -116,10 +120,11 @@ def main():
     asgs = get_asgs(asg_client)
     pprint.pprint(asgs)  
     for asg in asgs:
-      lt = get_lt_template(ec2_client, asg['LaunchTemplate']['LaunchTemplateName'])
+      template_name = asg['LaunchTemplate']['LaunchTemplateName']
+      lt = get_lt_template(ec2_client, template_name)
       print("-"*80)
       pprint.pprint(lt)
-      response = get_lt_info(ec2_client, asg['LaunchTemplate']['LaunchTemplateName'])
+      response = get_lt_info(ec2_client, template_name)
       print("*" * 80)
       print("LAUNCH TEMPLATE INFO")
       pprint.pprint(f"{response}")
@@ -137,6 +142,23 @@ def main():
       print("*" * 80)
       print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
       print("*" * 80)     
+      lt_dict = {'TagSpecifications': [
+                  {
+                    'ResourceType': 'instance',
+                    'Tags': [
+                    {
+                        'Key': 'Vendor_Managed_AMI',
+                        'Value': tag_value
+                    },
+                    ]
+                  }
+               ]         
+               }
+      new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
+      new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
+      print("*" * 80)
+      print(f"New launch template version: {new_lt_version}")
+
 
 
 if __name__ == "__main__":
@@ -150,6 +172,7 @@ TODO:
 - get ami details querying the data for the particular ami e.g. path 
 - determine how to update the tags with new Vendor_Managed_AMI 
 - create new launch template version from the template set as default, passing in our new tags 
+** need to preserve the previous tags from the original launch template source as well, our new version will overwrite them all
 - update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number
 
 Notes:
