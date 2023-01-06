@@ -69,23 +69,31 @@ def get_lt_info(ec2_client, template_name):
   )
   return response
 
-def do_it():
-  ec2 = boto3.client('ec2')
-  response = ec2.describe_instances()
-  pprint.pprint(response)
-  as_client = boto3.client('autoscaling')
-  asg = describe_group(as_client, "test")
-  print("-"*80)
-  pprint.pprint(asg)
-  print("-"*80)
+def get_ami_id(response):
+  '''Return just hte ImageID for the AMI'''
+  return response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
 
-  lt_name = asg['LaunchTemplate']['LaunchTemplateName']
-  print(f"Launch Template Name: {lt_name}")
-  print("-"*80)
-  template = get_template(ec2, lt_name)
-  pprint.pprint(template)
-  print("-"*80)
+def get_ami_info(ec2_client, ami_id):
+  '''Looks up and returns ami_name, owner, location'''
+  image_info = ec2_client.describe_images(ImageIds=[ami_id])
+  image_location = "none"
+  ami_name = "none"
+  owner_id = "none"
+  if len(image_info['Images']) > 0:
+    image = image_info['Images'][0]
+    image_location = image['ImageLocation']
+    ami_name = image['Name']
+    owner_id = image['OwnerId']
+  return image_location, ami_name, owner_id
 
+def get_vendor_tag_value(image_location, ami_name, owner_id):
+  '''fill out with logic later on - returns true, false, tbd'''
+  return True
+
+def update_launch_template(template_name, tag_value):
+  '''Creates new version of launch template, returns version number, sets as default template to use'''
+  # modify_launch_template()
+  pass
 
 def main():
   for region in REGIONS:
@@ -104,6 +112,16 @@ def main():
       print("*" * 80)
       print("LAUNCH TEMPLATE INFO")
       pprint.pprint(f"{response}")
+      ami_id = get_ami_id(response)
+      print("*" * 80)
+      print(f"AMI ImageID: {ami_id}") 
+      image_location, ami_name, owner_id = get_ami_info(ec2_client, ami_id)
+      print("*" * 80)
+      print(f"image_location: {image_location}")
+      print(f"ami_name: {ami_name}")
+      print(f"owner_id: {owner_id}")
+      tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
+
 
 if __name__ == "__main__":
   main()
@@ -111,11 +129,12 @@ if __name__ == "__main__":
 
 '''
 TODO:
-* Assuming we have a list of ASGs to act on
-- get the launch template id, name, version, tags, ami, ami path - use describe launch template versions
-- determine how to update the tags iow what logic to apply
-- create new launch template version from the current one, updating with our new tags
-- update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number?
+* Assuming we have a list of ASGs to act on (0+)
+- get the default launch template id, name, version, tags, ami, 
+- get ami details querying the data for the particular ami e.g. path 
+- determine how to update the tags with new Vendor_Managed_AMI 
+- create new launch template version from the current one, updating with our new tags 
+- update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number
 
 Notes:
 https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#client
