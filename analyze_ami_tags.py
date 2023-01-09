@@ -7,7 +7,7 @@ from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-REGIONS = ["us-east-1", "us-west-2"]
+REGIONS = ["us-west-2", "us-east-1"]
 
 '''Objective: create an easy way to gather info for all ASG launch templates, and update them as well'''
 
@@ -81,6 +81,25 @@ def get_launch_template_version(response):
   '''Return just hte ImageID for the AMI'''
   return response['LaunchTemplateVersions'][0]['VersionNumber']
 
+def determine_if_VMA_tag_exists(response):
+  '''Return True/False'''
+  result = False
+  lt_template_data = response['LaunchTemplateVersions'][0]['LaunchTemplateData']
+  # Handle the case of no tags set at all
+  if 'TagSpecifications' not in lt_template_data.keys():
+    print("TagSpeicifcations not found in LaunchTemplateData")
+    return False
+  else:
+    # Handle the case tag is missing
+    tags_by_type = lt_template_data.get('TagSpecifications', None)
+    for tag_type in tags_by_type:
+      if tag_type.get('ResourceType') == "instance": # Found all the instance tags
+        instance_tags = tag_type.get('Tags')
+        for kv in instance_tags:
+          if kv == 'Vendor_Managed_AMI':
+            result = True
+  return result
+
 def get_ami_info(ec2_client, ami_id):
   '''Looks up and returns ami_name, owner, location'''
   image_info = ec2_client.describe_images(ImageIds=[ami_id])
@@ -110,7 +129,7 @@ def update_launch_template(template_name, tag_value):
   # modify_launch_template()
   pass
 
-def main():
+def main(dry_run):
   for region in REGIONS:
     print("-"*80)
     print("-"*80)
@@ -127,7 +146,17 @@ def main():
       response = get_lt_info(ec2_client, template_name)
       print("*" * 80)
       print("LAUNCH TEMPLATE INFO")
-      pprint.pprint(f"{response}")
+      pprint.pprint(response)
+      print("*" * 80)
+      # Check if tag for Vendor_Managed_AMI already exists, if so then skip this one
+      VMA_tag_exists = determine_if_VMA_tag_exists(response)
+      if VMA_tag_exists:
+        print("VMA tag exists, SKIPPING this ASG")
+        continue
+      else:
+        print("VMA tag does not exist, will CREATE this tag")
+
+      print("*" * 80)
       ami_id = get_ami_id(response)
       lt_version = get_launch_template_version(response)
       print("*" * 80)
@@ -154,28 +183,48 @@ def main():
                   }
                ]         
                }
-      new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
-      new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
-      print("*" * 80)
-      print(f"New launch template version: {new_lt_version}")
+      if not dry_run: 
+        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
+        new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
+        print("*" * 80)
+        print(f"New launch template version: {new_lt_version}")
+      else:
+        print()
+        print("*" * 80)
+        print("*" * 80)
+        print("Dry run enabled: skipping creation of new launch template, update of tags, switching asg to use new launch template")
 
 
 
 if __name__ == "__main__":
-  main()
+  dry_run = True
+  if len(sys.argv) > 1:
+    input = sys.argv[1]
+    if "false" == input.lower():
+      dry_run = False
+  main(dry_run)
 
 
 '''
 TODO:
+*** Should have a dry-run mode by default - just show what we found and what we would do if dry-run flag is set
 * Assuming we have a list of ASGs to act on (0+)
 - get the default launch template id, name, version, tags, ami, 
+  - if Vendor_Managed_AMI already exists, skip to next ASG
 - get ami details querying the data for the particular ami e.g. path 
 - determine how to update the tags with new Vendor_Managed_AMI 
 - create new launch template version from the template set as default, passing in our new tags 
-** need to preserve the previous tags from the original launch template source as well, our new version will overwrite them all
+  - MUST preserve the previous tags from the original launch template source as well, our new version will overwrite them all
 - update launch template DefaultVersionNumber (using modify_launch_template() to use our new version number
 
 Notes:
 https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#client
 Can use create_launch_template_version(**kwargs)¶ to create a new launch template from a previous one, and update the tags
+
+
+- get all the instance tags
+- add my key/value to the list
+- create new launch template version from the default template
+- get the version number of the new template just created
+- set that as the new default version to launch with
 '''
