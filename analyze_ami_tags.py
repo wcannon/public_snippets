@@ -152,82 +152,87 @@ def update_launch_template(template_name, tag_value):
   # modify_launch_template()
   pass
 
-def main(dry_run):
-  for region in REGIONS:
-    print("-"*80)
-    print("-"*80)
-    print(f"NOW IN REGION: {region}")
-    ec2_client = boto3.client('ec2', region_name=region)
-    asg_client = boto3.client('autoscaling', region_name=region)
-    asgs = get_asgs(asg_client)
-    pprint.pprint(asgs)  
-    for asg in asgs:
-      template_name = asg['LaunchTemplate']['LaunchTemplateName']
-      lt = get_lt_template(ec2_client, template_name)
+def main(dry_run, count):
+  while count > 0:
+    for region in REGIONS:
       print("-"*80)
-      pprint.pprint(lt)
-      response = get_lt_info(ec2_client, template_name)
-      print("*" * 80)
-      print("LAUNCH TEMPLATE INFO")
-      pprint.pprint(response)
-      print("*" * 80)
-      # Check if tag for Vendor_Managed_AMI already exists, if so then skip this one
-      VMA_tag_exists = determine_if_VMA_tag_exists(response)
-      if VMA_tag_exists:
-        print("VMA tag exists, SKIPPING this ASG")
-        continue
-      else:
-        print("VMA tag does not exist, will CREATE this tag")
-      print("*" * 80)
-      ami_id = get_ami_id(response)
-      lt_version = get_launch_template_version(response)
-      print("*" * 80)
-      print(f"AMI ImageID: {ami_id}") 
-      print(f"launch template version: {lt_version}") 
-      image_location, ami_name, owner_id = get_ami_info(ec2_client, ami_id)
-      print("*" * 80)
-      print(f"image_location: {image_location}")
-      print(f"ami_name: {ami_name}")
-      print(f"owner_id: {owner_id}")
-      tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
-      print("*" * 80)
-      print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
-      print("*" * 80)  
-      VMA_tag_exists_str = str(VMA_tag_exists).lower()   
-      TagSpecifications = create_instance_tags_list(response, VMA_tag_exists_str)   
-      if not dry_run: 
-        lt_dict = {'TagSpecifications': TagSpecifications}
-        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
-        new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
+      print("-"*80)
+      print(f"NOW IN REGION: {region}")
+      ec2_client = boto3.client('ec2', region_name=region)
+      asg_client = boto3.client('autoscaling', region_name=region)
+      asgs = get_asgs(asg_client)
+      #pprint.pprint(asgs)  
+      for asg in asgs:
+        template_name = asg['LaunchTemplate']['LaunchTemplateName']
+        lt = get_lt_template(ec2_client, template_name)
+        print("-"*80)
+        pprint.pprint(lt)
+        response = get_lt_info(ec2_client, template_name)
         print("*" * 80)
-        print(f"New launch template version: {new_lt_version}")
+        print("LAUNCH TEMPLATE INFO")
+        pprint.pprint(response)
         print("*" * 80)
-        print(f"Updating launch template to use new version {new_lt_version} as default version")
-        version_update_response = ec2_client.modify_launch_template(
-          DryRun=False,
-          #ClientToken='string',
-          #LaunchTemplateId='string',
-          LaunchTemplateName=template_name,
-          DefaultVersion=str(new_lt_version)
-          )
+        # Check if tag for Vendor_Managed_AMI already exists, if so then skip this one
+        VMA_tag_exists = determine_if_VMA_tag_exists(response)
+        if VMA_tag_exists:
+          print("Vendor_Managed_AMI tag exists, SKIPPING this ASG")
+          continue
+        else:
+          print("VMA tag does not exist, will CREATE this tag")
+        print("*" * 80)
+        ami_id = get_ami_id(response)
+        lt_version = get_launch_template_version(response)
+        print("*" * 80)
+        print(f"AMI ImageID: {ami_id}") 
+        print(f"launch template version: {lt_version}") 
+        image_location, ami_name, owner_id = get_ami_info(ec2_client, ami_id)
+        print("*" * 80)
+        print(f"image_location: {image_location}")
+        print(f"ami_name: {ami_name}")
+        print(f"owner_id: {owner_id}")
+        tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
+        print("*" * 80)
+        print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
+        print("*" * 80)  
+        VMA_tag_exists_str = str(VMA_tag_exists).lower()   
+        TagSpecifications = create_instance_tags_list(response, VMA_tag_exists_str)   
+        if not dry_run: 
+          lt_dict = {'TagSpecifications': TagSpecifications}
+          new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
+          new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
+          print("*" * 80)
+          print(f"New launch template version: {new_lt_version}")
+          print("*" * 80)
+          print(f"Updating launch template to use new version {new_lt_version} as default version")
+          version_update_response = ec2_client.modify_launch_template(
+            DryRun=False,
+            #ClientToken='string',
+            #LaunchTemplateId='string',
+            LaunchTemplateName=template_name,
+            DefaultVersion=str(new_lt_version)
+            )
 
-      else:
-        print()
-        print("*" * 80)
-        print("*" * 80)
-        print("Dry run enabled: skipping creation of new launch template, update of tags, switching asg to use new launch template")
-        print("*" * 80)
-        print("Current TagSpecifications are: ")
-        pprint.pprint(TagSpecifications)
+        else:
+          print()
+          print("*" * 80)
+          print("*" * 80)
+          print("Dry run enabled: skipping creation of new launch template, update of tags, switching asg to use new launch template")
+          print("*" * 80)
+          print("Current TagSpecifications are: ")
+          pprint.pprint(TagSpecifications)
+    count = count - 1
 
 
 if __name__ == "__main__":
   dry_run = True
+  count = 1000 # far more asgs than we expect = "no limit"
   if len(sys.argv) > 1:
     input = sys.argv[1]
     if "false" == input.lower():
       dry_run = False
-  main(dry_run)
+  if len(sys.argv) > 2:#
+    count = int(sys.argv[2])
+  main(dry_run, count)
 
 
 '''
