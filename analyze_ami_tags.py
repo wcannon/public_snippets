@@ -95,10 +95,11 @@ def determine_if_VMA_tag_exists(response):
     tags_by_type = lt_template_data.get('TagSpecifications', None)
     for tag_type in tags_by_type:
       if tag_type.get('ResourceType') == "instance": # Found all the instance tags
-        instance_tags = tag_type.get('Tags')
-        for kv in instance_tags:
-          if kv == 'Vendor_Managed_AMI':
-            result = True
+        instance_tags_list = tag_type.get('Tags')
+        for dict in instance_tags_list:
+          print(f"tag_dict: {dict}")
+          if dict['Key'] == 'Vendor_Managed_AMI':
+            return True
   return result
 
 def create_instance_tags_list(response, VMA_value):
