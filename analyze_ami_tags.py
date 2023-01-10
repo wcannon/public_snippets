@@ -191,13 +191,25 @@ def main(dry_run):
       tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
       print("*" * 80)
       print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
-      print("*" * 80)     
-      TagSpecifications = create_instance_tags_list(response, VMA_tag_exists)   
+      print("*" * 80)  
+      VMA_tag_exists_str = str(VMA_tag_exists).lower()   
+      TagSpecifications = create_instance_tags_list(response, VMA_tag_exists_str)   
       if not dry_run: 
-        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), TagSpecifications)
+        lt_dict = {'TagSpecifications': TagSpecifications}
+        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
         new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
         print("*" * 80)
         print(f"New launch template version: {new_lt_version}")
+        print("*" * 80)
+        print(f"Updating launch template to use new version {new_lt_version} as default version")
+        version_update_response = ec2_client.modify_launch_template(
+          DryRun=False,
+          #ClientToken='string',
+          #LaunchTemplateId='string',
+          LaunchTemplateName=template_name,
+          DefaultVersion=str(new_lt_version)
+          )
+
       else:
         print()
         print("*" * 80)
