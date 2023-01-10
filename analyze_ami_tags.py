@@ -7,7 +7,8 @@ from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-REGIONS = ["us-west-2", "us-east-1"]
+#REGIONS = ["us-west-2", "us-east-1"]
+REGIONS = ["us-west-2"]
 
 '''Objective: create an easy way to gather info for all ASG launch templates, and update them as well'''
 
@@ -100,6 +101,27 @@ def determine_if_VMA_tag_exists(response):
             result = True
   return result
 
+def create_instance_tags_list(response, VMA_value):
+  '''Inspect a response, and return the correct TagSpecifications when adding our Vendor_Managed_AMI tag'''
+  TagSpecifications = []
+  lt_template_data = response['LaunchTemplateVersions'][0]['LaunchTemplateData']
+  if 'TagSpecifications' not in lt_template_data.keys(): # no tags on any resource types at all
+    TagSpecifications.append({'ResourceType': 'instance',
+                               'Tags' : [ {'Key': 'Vendor_Managed_AMI', 'Value': VMA_value}]})
+  else: # we preserve existing tags, and add ours to it
+    tags_list = lt_template_data.get('TagSpecifications', None) # tags_list is a list of dicts
+    for tags_dict in tags_list:
+      if tags_dict.get('ResourceType') != "instance": # keep other types intact
+        TagSpecifications.append(tags_dict)
+      else: # we need to add our key/value and preserve the other instance tags
+        new_tags_dict = {'ResourceType' : 'instance'}
+        new_tags = tags_dict['Tags'][:] # get a copy, preserves all the current tags
+        new_tags.append( {'Key':'Vendor_Managed_AMI', 'Value': VMA_value})
+        new_tags_dict['Tags'] = new_tags
+    TagSpecifications.append(new_tags_dict)
+  return TagSpecifications 
+
+
 def get_ami_info(ec2_client, ami_id):
   '''Looks up and returns ami_name, owner, location'''
   image_info = ec2_client.describe_images(ImageIds=[ami_id])
@@ -155,7 +177,6 @@ def main(dry_run):
         continue
       else:
         print("VMA tag does not exist, will CREATE this tag")
-
       print("*" * 80)
       ami_id = get_ami_id(response)
       lt_version = get_launch_template_version(response)
@@ -171,20 +192,9 @@ def main(dry_run):
       print("*" * 80)
       print(f"Vendor_Managed_AMI tag value will be: {tag_value}")
       print("*" * 80)     
-      lt_dict = {'TagSpecifications': [
-                  {
-                    'ResourceType': 'instance',
-                    'Tags': [
-                    {
-                        'Key': 'Vendor_Managed_AMI',
-                        'Value': tag_value
-                    },
-                    ]
-                  }
-               ]         
-               }
+      TagSpecifications = create_instance_tags_list(response, VMA_tag_exists)   
       if not dry_run: 
-        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), lt_dict)
+        new_lt = create_new_launch_template(ec2_client, template_name, str(lt_version), TagSpecifications)
         new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
         print("*" * 80)
         print(f"New launch template version: {new_lt_version}")
@@ -193,7 +203,9 @@ def main(dry_run):
         print("*" * 80)
         print("*" * 80)
         print("Dry run enabled: skipping creation of new launch template, update of tags, switching asg to use new launch template")
-
+        print("*" * 80)
+        print("Current TagSpecifications are: ")
+        pprint.pprint(TagSpecifications)
 
 
 if __name__ == "__main__":
