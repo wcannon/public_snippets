@@ -164,6 +164,9 @@ def main(dry_run, count):
       #pprint.pprint(asgs)  
       for asg in asgs:
         template_name = asg['LaunchTemplate']['LaunchTemplateName']
+        print("*" * 80)
+        print(f"Template Name: {template_name}")
+        print("*" * 80)
         lt = get_lt_template(ec2_client, template_name)
         print("-"*80)
         pprint.pprint(lt)
@@ -221,6 +224,7 @@ def main(dry_run, count):
           print("Current TagSpecifications are: ")
           pprint.pprint(TagSpecifications)
     count = count - 1
+    
 
 
 if __name__ == "__main__":
