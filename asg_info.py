@@ -8,7 +8,7 @@ import argparse
 
 logger = logging.getLogger(__name__)
 
-REGIONS = ["us-west-2", "us-east-1"]
+REGIONS = ["us-west-2"]
 
 def get_asgs(client, asg_name=None):
     '''Return a list of either one, or all ASGs for a region'''
@@ -37,13 +37,19 @@ def main(dry_run=True, num_asg=None, asg_name=None, region=None):
     # Update one asg only - for testing purposes, assuming us-west-2 region
     if asg_name:  
         # get an asg, pass it to update_asg_tag fn
-        asg_list = get_asgs(asg_client, asg_name)
+        ec2_client = boto3.client('ec2', region_name=region)
+        asg_client = boto3.client('autoscaling', region_name=region)
+        asg_list = get_asgs(asg_client, asg_name) # should have 1 element
         update_asg_tag(ec2_client, asg_client, region, asg_list[0])
     # Update only up to the value of num_asg - for batch testing purposes e.g. update 5 and review data
     elif num_asg:
         count = 0
         stop = 0
-        for region in REGIONS:
+        for reg in REGIONS:
+            ec2_client = boto3.client('ec2', region_name=reg)
+            asg_client = boto3.client('autoscaling', region_name=reg)
+            asgs = get_asgs(asg_client)
+            asg_count = len(asgs)
             if num_asg < asg_count: 
                 stop = num_asg
             else: 
@@ -51,11 +57,15 @@ def main(dry_run=True, num_asg=None, asg_name=None, region=None):
             for asg in asgs:
                 update_asg_tag(ec2_client, asg_client, region, asg)
                 count = count + 1
-            if count >= stop:
-                sys.exit(0) # Exit early b/c we are at the batch size limit
+                if count >= stop:
+                    print(f"Count: {count}")
+                    sys.exit(0) # Exit early b/c we are at the batch size limit
     # Update all the ASGs in all regions
     else:
-        for region in REGIONS:
+        for reg in REGIONS:
+            ec2_client = boto3.client('ec2', region_name=reg)
+            asg_client = boto3.client('autoscaling', region_name=reg)
+            asgs = get_asgs(asg_client)    
             for asg in asgs:
                 update_asg_tag(ec2_client, asg_client, region, asg)
 
