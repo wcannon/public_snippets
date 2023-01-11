@@ -64,6 +64,23 @@ def determine_if_VMA_tag_exists(response):
             return True
   return result
 
+def get_ami_info(ec2_client, ami_id):
+  '''Looks up and returns ami_name, owner, location'''
+  image_info = ec2_client.describe_images(ImageIds=[ami_id])
+  image_location = "none"
+  ami_name = "none"
+  owner_id = "none"
+  if len(image_info['Images']) > 0:
+    image = image_info['Images'][0]
+    image_location = image['ImageLocation']
+    ami_name = image['Name']
+    owner_id = image['OwnerId']
+  return image_location, ami_name, owner_id
+
+def get_vendor_tag_value(image_location, ami_name, owner_id):
+  '''fill out with logic later on - returns true, false, tbd'''
+  return "true"
+
 def main(dry_run=True, num_asg=None, asg_name=None, region=None):
     ec2_client = boto3.client('ec2', region_name=region)
     asg_client = boto3.client('autoscaling', region_name=region)
@@ -137,6 +154,15 @@ def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
     print("-"*80)
     vma_exists = determine_if_VMA_tag_exists(lt_info)
     print(f"VMA tag exists: {vma_exists}")
+    if vma_exists: # don't need to add a tag
+        return
+
+    print("-"*80)
+    image_location, ami_name, owner_id = get_ami_info(ec2_client, image_id)
+    print(f"image_location: {image_location}\n, ami_name: {ami_name}\n, owner_id: {owner_id}\n")
+    print("-" * 80)
+    vma_tag_value = get_vendor_tag_value(image_location, ami_name, owner_id)
+    print(f"vma_tag_value: {vma_tag_value}")
     return
 
 
@@ -169,10 +195,11 @@ In a region, gather all asgs
     no? -> capture region, name to a file for later and skip to next asg
 - DONE determine launch template name
 - DONE determine launch template version
-- get all launch template info using describe_launch_template_versions, passing in version from asg
+- DONE get all launch template info using describe_launch_template_versions, passing in version from asg
 - determine if Vendor_Managed_AMI tag exists
     yes? -> skip to next asg
     no? -> determine value for tag (true|false), and create new launch template version with new tag and value
+    ** update get_vendor_tag_value() with actual logic
 - if asg lt version to use is:
     $Default -> update launch template definition of Default to be our new version
     an integer -> update ASG definition to use our version int(version)
