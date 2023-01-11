@@ -9,6 +9,13 @@ import argparse
 logger = logging.getLogger(__name__)
 
 REGIONS = ["us-west-2"]
+FILENAME = "asgs_using_launch_config.txt"
+
+def write_launch_config_asg_file(region, asg_name):
+    f = open(FILENAME, 'w+')
+    f.write(f"region: {region}, asg_name: {asg_name}")
+    f.close()
+    return
 
 def get_asgs(client, asg_name=None):
     '''Return a list of either one, or all ASGs for a region'''
@@ -75,6 +82,9 @@ def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
     print("-"*80)
     print("-"*80)
     pprint.pprint(asg)
+    if 'LaunchConfigurationName' in asg.keys():
+        region = asg['AvailabilityZones'][0][:-1]
+        write_launch_config_asg_file(region, asg['AutoScalingGroupName'])
     return
 
 
