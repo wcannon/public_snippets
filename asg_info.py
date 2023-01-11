@@ -35,6 +35,35 @@ def get_launch_template_version(asg):
         version = lt.get('Version', None)
     return version
 
+def get_lt_info(ec2_client, template_name, version):
+  response = ec2_client.describe_launch_template_versions(
+    LaunchTemplateName=template_name,
+    Versions=[
+        version,
+    ]
+  )
+  return response
+
+def determine_if_VMA_tag_exists(response):
+  '''Return True/False'''
+  result = False
+  lt_template_data = response['LaunchTemplateVersions'][0]['LaunchTemplateData']
+  # Handle the case of no tags set at all
+  if 'TagSpecifications' not in lt_template_data.keys():
+    print("TagSpeicifcations not found in LaunchTemplateData")
+    return False
+  else:
+    # Handle the case tag is missing
+    tags_by_type = lt_template_data.get('TagSpecifications', None)
+    for tag_type in tags_by_type:
+      if tag_type.get('ResourceType') == "instance": # Found all the instance tags
+        instance_tags_list = tag_type.get('Tags')
+        for dict in instance_tags_list:
+          print(f"tag_dict: {dict}")
+          if dict['Key'] == 'Vendor_Managed_AMI':
+            return True
+  return result
+
 def main(dry_run=True, num_asg=None, asg_name=None, region=None):
     ec2_client = boto3.client('ec2', region_name=region)
     asg_client = boto3.client('autoscaling', region_name=region)
@@ -82,9 +111,32 @@ def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
     print("-"*80)
     print("-"*80)
     pprint.pprint(asg)
+    asg_name = asg['AutoScalingGroupName']
+
     if 'LaunchConfigurationName' in asg.keys():
-        region = asg['AvailabilityZones'][0][:-1]
-        write_launch_config_asg_file(region, asg['AutoScalingGroupName'])
+        try:
+            region = asg['AvailabilityZones'][0][:-1]
+        except Exception as e:
+            region = "unknown"
+            pass
+
+        write_launch_config_asg_file(region, asg_name)
+        return
+    
+    # ASG using launch template, gathering info
+    template_name = asg['LaunchTemplate']['LaunchTemplateName']
+    template_version = asg['LaunchTemplate']['Version']
+    print("-"*80)
+    lt_info = get_lt_info(ec2_client, template_name, template_version)
+    image_id = lt_info['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
+
+    print("Launch Template Info")
+    pprint.pprint(lt_info)
+    print("-"*80)
+    print(f"ImageID: {image_id}")
+    print("-"*80)
+    vma_exists = determine_if_VMA_tag_exists(lt_info)
+    print(f"VMA tag exists: {vma_exists}")
     return
 
 
@@ -113,10 +165,10 @@ if __name__ == '__main__':
 
 '''
 In a region, gather all asgs
-- determine if it has a launch template
+- DONE determine if it has a launch template
     no? -> capture region, name to a file for later and skip to next asg
-- determine launch template name
-- determine launch template version
+- DONE determine launch template name
+- DONE determine launch template version
 - get all launch template info using describe_launch_template_versions, passing in version from asg
 - determine if Vendor_Managed_AMI tag exists
     yes? -> skip to next asg
