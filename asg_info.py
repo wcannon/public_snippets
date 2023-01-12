@@ -246,15 +246,15 @@ def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
         #print("Updating ASG to use our new version number")
         #print(asg_client, asg_name, template_name, new_lt_version)
         r1 = update_asg_launch_template_version(asg_client, asg_name, template_name, str(new_lt_version))
-        detail = "LT uses specific version number"
+        detail = f"LT uses specific version number - original: {lt_version} new:{new_lt_version}"
         #pprint.pprint(r1)
     elif template_version == "$Default": # have to update launch template value of $Default
        # print("Updating $Default to have our latest version number")
         update_launch_template_default(ec2_client, template_name, str(new_lt_version))
-        detail = "LT uses $Default version - updated definition"
+        detail = f"LT uses $Default version - updated definition - original: {lt_version} new:{new_lt_version}"
     elif template_version == "$Latest": # no work to do, will use our newer version
         #print("ASG set to use latest, continuing")
-        detail = "LT uses $Latest version - noop"
+        detail = f"LT uses $Latest version - noop - original: {lt_version} new:{new_lt_version}"
         pass
     else:
         print(f"Should not see this printed - new corner case found for asg: {asg_name}")
