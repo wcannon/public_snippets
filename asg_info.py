@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 REGIONS = ["us-west-2"]
 FILENAME = "asgs_using_launch_config.txt"
+HISTORY = "asg-update-output"
+
 
 def write_launch_config_asg_file(region, asg_name):
     f = open(FILENAME, 'w+')
@@ -51,7 +53,7 @@ def determine_if_VMA_tag_exists(response):
   lt_template_data = response['LaunchTemplateVersions'][0]['LaunchTemplateData']
   # Handle the case of no tags set at all
   if 'TagSpecifications' not in lt_template_data.keys():
-    print("TagSpeicifcations not found in LaunchTemplateData")
+    #print("TagSpeicifcations not found in LaunchTemplateData")
     return False
   else:
     # Handle the case tag is missing
@@ -60,7 +62,7 @@ def determine_if_VMA_tag_exists(response):
       if tag_type.get('ResourceType') == "instance": # Found all the instance tags
         instance_tags_list = tag_type.get('Tags')
         for dict in instance_tags_list:
-          print(f"tag_dict: {dict}")
+          #print(f"tag_dict: {dict}")
           if dict['Key'] == 'Vendor_Managed_AMI':
             return True
   return result
@@ -136,13 +138,21 @@ def main(dry_run=True, num_asg=None, asg_name=None, region=None):
     asgs = get_asgs(asg_client)
     asg_count = len(asgs)
 
+    now = datetime.datetime.now()
+    fname = "-".join([HISTORY, str(now.year), str(now.month), str(now.day), str(now.hour), str(now.minute), str(now.second)]) + ".csv"
+    history = open(fname, 'w')
+    history.write("Region,ASG Name,LT Name,Updated,Detail")
+    history.write("\n")
+
     # Update one asg only - for testing purposes, assuming us-west-2 region
     if asg_name:  
         # get an asg, pass it to update_asg_tag fn
         ec2_client = boto3.client('ec2', region_name=region)
         asg_client = boto3.client('autoscaling', region_name=region)
         asg_list = get_asgs(asg_client, asg_name) # should have 1 element
-        update_asg_tag(ec2_client, asg_client, region, asg_list[0])
+        asg_name, template_name, updated, detail = update_asg_tag(ec2_client, asg_client, region, asg_list[0])
+        history.write(",".join([str(region), str(asg_name), str(template_name), str(updated), str(detail)]))
+        history.write("\n")
     # Update only up to the value of num_asg - for batch testing purposes e.g. update 5 and review data
     elif num_asg:
         count = 0
@@ -157,10 +167,12 @@ def main(dry_run=True, num_asg=None, asg_name=None, region=None):
             else: 
                 stop = asg_count
             for asg in asgs:
-                update_asg_tag(ec2_client, asg_client, region, asg)
+                asg_name, template_name, updated, detail = update_asg_tag(ec2_client, asg_client, region, asg)
+                history.write(",".join([str(region), str(asg_name), str(template_name), str(updated), str(detail)]))
+                history.write("\n")
                 count = count + 1
                 if count >= stop:
-                    print(f"Count: {count}")
+                    #print(f"Count: {count}")
                     sys.exit(0) # Exit early b/c we are at the batch size limit
     # Update all the ASGs in all regions
     else:
@@ -169,14 +181,17 @@ def main(dry_run=True, num_asg=None, asg_name=None, region=None):
             asg_client = boto3.client('autoscaling', region_name=reg)
             asgs = get_asgs(asg_client)    
             for asg in asgs:
-                update_asg_tag(ec2_client, asg_client, region, asg)
-
+                asg_name, template_name, updated, detail =  update_asg_tag(ec2_client, asg_client, region, asg)
+                history.write(",".join([str(region), str(asg_name), str(template_name), str(updated), str(detail)]))
+                history.write("\n")
+    history.close()
 
 def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
     '''Update an asg launch template tag for Vendor_Managed_AMI'''
-    print("-"*80)
-    print("-"*80)
-    pprint.pprint(asg)
+    # returns asg_name, lt_name, updated (bool)
+    #print("-"*80)
+    #print("-"*80)
+    #pprint.pprint(asg)
     asg_name = asg['AutoScalingGroupName']
 
     if 'LaunchConfigurationName' in asg.keys():
@@ -187,58 +202,63 @@ def update_asg_tag(ec2_client=None, asg_client=None, region=None, asg=None):
             pass
 
         write_launch_config_asg_file(region, asg_name)
-        return
+        return asg_name, "None", False, "Uses Launch Configuration"
     
     # ASG using launch template, gathering info
     template_name = asg['LaunchTemplate']['LaunchTemplateName']
     template_version = asg['LaunchTemplate']['Version']
-    print("-"*80)
-    print(f"asg template_version to use: {template_version}")
-    print("-"*80)
+    #print("-"*80)
+    #print(f"asg template_version to use: {template_version}")
+    #print("-"*80)
     lt_info = get_lt_info(ec2_client, template_name, template_version)
     image_id = lt_info['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
     lt_version = str(lt_info['LaunchTemplateVersions'][0]['VersionNumber'])
-    print("-"*80)
-    print(f"lt_version: {lt_version}")
-    print("-"*80)
-    print("Launch Template Info")
-    pprint.pprint(lt_info)
-    print("-"*80)
-    print(f"ImageID: {image_id}")
-    print("-"*80)
+    #print("-"*80)
+    #print(f"lt_version: {lt_version}")
+    #print("-"*80)
+    #print("Launch Template Info")
+    #pprint.pprint(lt_info)
+    #print("-"*80)
+    #print(f"ImageID: {image_id}")
+    #print("-"*80)
     vma_exists = determine_if_VMA_tag_exists(lt_info)
-    print(f"VMA tag exists: {vma_exists}")
+    #print(f"VMA tag exists: {vma_exists}")
     if vma_exists: # don't need to add a tag
-        print(f"Vendor_Managed_AMI tag exists for launch template: {template_name}")
-        return
+        print(f"ASG: {asg_name}, Launch Template {template_name}, already has tag 'Vendor_Managed_AMI' - will not update tags")
+        return asg_name, template_name, False, "Tag already exists"
 
-    print("-"*80)
+    #print("-"*80)
     image_location, ami_name, owner_id = get_ami_info(ec2_client, image_id)
-    print(f"image_location: {image_location}\n ami_name: {ami_name}\n owner_id: {owner_id}\n")
-    print("-" * 80)
+    #print(f"image_location: {image_location}\n ami_name: {ami_name}\n owner_id: {owner_id}\n")
+    #print("-" * 80)
     vma_tag_value = get_vendor_tag_value(image_location, ami_name, owner_id) # will be true or false or tbd
-    print(f"vma_tag_value: {vma_tag_value}")
-    print("-" * 80)
+    #print(f"vma_tag_value: {vma_tag_value}")
+    #print("-" * 80)
     TagSpecifications = create_instance_tags_list(lt_info, vma_tag_value)   
     lt_dict = {'TagSpecifications': TagSpecifications}
     new_lt = create_new_launch_template(ec2_client, template_name, lt_version, lt_dict)
     new_lt_version = new_lt['LaunchTemplateVersion']['VersionNumber']
-    print("*" * 80)
-    print(f"New launch template version: {new_lt_version}")
-    print("-"*80)
+    #print("*" * 80)
+    #print(f"New launch template version: {new_lt_version}")
+    #print("-"*80)
+    detail = ""
     if template_version.isdigit(): # have to update the asg to use new version number
-        print("Updating ASG to use our new version number")
-        print(asg_client, asg_name, template_name, new_lt_version)
+        #print("Updating ASG to use our new version number")
+        #print(asg_client, asg_name, template_name, new_lt_version)
         r1 = update_asg_launch_template_version(asg_client, asg_name, template_name, str(new_lt_version))
+        detail = "LT uses specific version number"
         #pprint.pprint(r1)
     elif template_version == "$Default": # have to update launch template value of $Default
-        print("Updating $Default to have our latest version number")
+       # print("Updating $Default to have our latest version number")
         update_launch_template_default(ec2_client, template_name, str(new_lt_version))
+        detail = "LT uses $Default version - updated definition"
     elif template_version == "$Latest": # no work to do, will use our newer version
-        print("ASG set to use latest, continuing")
+        #print("ASG set to use latest, continuing")
+        detail = "LT uses $Latest version - noop"
+        pass
     else:
-        print("Should not see this printed - new corner case found")
-    return
+        print(f"Should not see this printed - new corner case found for asg: {asg_name}")
+    return asg_name, template_name, True, "Tag created - " + detail
 
 
 
