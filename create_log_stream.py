@@ -43,8 +43,8 @@ def create_log_stream(client, logGroupName, logStreamName):
 if __name__ == "__main__":
     client = boto3.client('logs', region_name=AWS_REGION)
     stream_names = get_log_stream_names(client, 'bigid')
+    today = get_todays_stream_name()
 
-    today += "-repeat"
     if today in stream_names:
         print("found it, don't need to create it")
     else:
