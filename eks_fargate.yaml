@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template for deploying an Amazon EKS cluster using Fargate
+
+Parameters:
+  ClusterName:
+    Type: String
+    Description: Name of the EKS cluster
+  VpcId:
+    Type: String
+    Description: ID of the existing VPC where the EKS cluster should be deployed
+
+Resources:
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref ClusterName
+      RoleArn: arn:aws:iam::YOUR_ACCOUNT_ID:role/YourEKSClusterRole
+      ResourcesVpcConfig:
+        SubnetIds:
+          - subnet-1-id
+          - subnet-2-id
+        SecurityGroupIds:
+          - sg-id
+
+  FargateProfile:
+    Type: AWS::EKS::FargateProfile
+    Properties:
+      ClusterName: !Ref EKSCluster
+      FargateProfileName: default
+      Subnets:
+        - subnet-1-id
+        - subnet-2-id
+      Selectors:
+        - Namespace: default
+
+Outputs:
+  EKSClusterName:
+    Description: Name of the created EKS cluster
+    Value: !Ref EKSCluster
+  EKSClusterEndpoint:
+    Description: Endpoint URL of the EKS cluster
+    Value: !GetAtt EKSCluster.Endpoint
+
